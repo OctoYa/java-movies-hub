@@ -26,24 +26,24 @@ public class MoviesHandler extends BaseHttpHandler {
     @Override
     public void handle(HttpExchange ex) throws IOException {
         try {
-            String method = ex.getRequestMethod();
+            HttpMethod method = HttpMethod.from(ex.getRequestMethod());
             switch (method) {
-                case "GET":
+                case GET:
                     handleGet(ex);
                     break;
-                case "POST":
+                case POST:
                     handlePost(ex);
                     break;
-                case "DELETE":
+                case DELETE:
                     handleDelete(ex);
                     break;
                 default:
-                    ex.sendResponseHeaders(405, -1);
+                    ex.sendResponseHeaders(HttpStatus.METHOD_NOT_ALLOWED.getCode(), -1);
                     ex.close();
                     break;
             }
         } catch (Exception e) {
-            sendJson(ex, 500, gson.toJson(new ErrorResponse("Внутренняя ошибка сервера")));
+            sendJson(ex, HttpStatus.INTERNAL_SERVER_ERROR, gson.toJson(new ErrorResponse("Внутренняя ошибка сервера")));
         }
     }
 
@@ -56,36 +56,36 @@ public class MoviesHandler extends BaseHttpHandler {
                 if (queryParams.containsKey("year")) {
                     try {
                         int year = Integer.parseInt(queryParams.get("year"));
-                        sendJson(ex, 200, gson.toJson(store.getByYear(year)));
+                        sendJson(ex, HttpStatus.OK, gson.toJson(store.getByYear(year)));
                         return;
                     } catch (NumberFormatException e) {
-                        sendJson(ex, 400, gson.toJson(new ErrorResponse("Некорректный формат года")));
+                        sendJson(ex, HttpStatus.BAD_REQUEST, gson.toJson(new ErrorResponse("Некорректный формат года")));
                         return;
                     }
                 }
             }
-            sendJson(ex, 200, gson.toJson(store.getAll()));
+            sendJson(ex, HttpStatus.OK, gson.toJson(store.getAll()));
             return;
         }
 
         Long id = extractId(path);
         if (id == null) {
-            sendJson(ex, 400, gson.toJson(new ErrorResponse("Некорректный ID")));
+            sendJson(ex, HttpStatus.BAD_REQUEST, gson.toJson(new ErrorResponse("Некорректный ID")));
             return;
         }
 
         Optional<Movie> movieOpt = store.getById(id);
         if (movieOpt.isPresent()) {
-            sendJson(ex, 200, gson.toJson(movieOpt.get()));
+            sendJson(ex, HttpStatus.OK, gson.toJson(movieOpt.get()));
         } else {
-            sendJson(ex, 404, gson.toJson(new ErrorResponse("Фильм не найден")));
+            sendJson(ex, HttpStatus.NOT_FOUND, gson.toJson(new ErrorResponse("Фильм не найден")));
         }
     }
 
     private void handlePost(HttpExchange ex) throws IOException {
-        String contentType = ex.getRequestHeaders().getFirst("Content-Type");
-        if (contentType == null || !contentType.toLowerCase().startsWith("application/json")) {
-            ex.sendResponseHeaders(415, -1);
+        String contentType = ex.getRequestHeaders().getFirst(HEADER_CONTENT_TYPE);
+        if (contentType == null || !contentType.toLowerCase().startsWith(APPLICATION_JSON)) {
+            ex.sendResponseHeaders(HttpStatus.UNSUPPORTED_MEDIA_TYPE.getCode(), -1);
             ex.close();
             return;
         }
@@ -95,29 +95,29 @@ public class MoviesHandler extends BaseHttpHandler {
         try {
             movie = gson.fromJson(body, Movie.class);
             if (movie == null) {
-                sendJson(ex, 422, gson.toJson(new ErrorResponse("Невалидный JSON")));
+                sendJson(ex, HttpStatus.UNPROCESSABLE_ENTITY, gson.toJson(new ErrorResponse("Невалидный JSON")));
                 return;
             }
         } catch (Exception e) {
-            sendJson(ex, 422, gson.toJson(new ErrorResponse("Невалидный JSON")));
+            sendJson(ex, HttpStatus.UNPROCESSABLE_ENTITY, gson.toJson(new ErrorResponse("Невалидный JSON")));
             return;
         }
 
         List<String> details = validateMovie(movie);
         if (!details.isEmpty()) {
-            sendJson(ex, 422, gson.toJson(new ErrorResponse("Ошибка валидации", details)));
+            sendJson(ex, HttpStatus.UNPROCESSABLE_ENTITY, gson.toJson(new ErrorResponse("Ошибка валидации", details)));
             return;
         }
 
         Movie created = store.add(movie);
-        sendJson(ex, 201, gson.toJson(created));
+        sendJson(ex, HttpStatus.CREATED, gson.toJson(created));
     }
 
     private void handleDelete(HttpExchange ex) throws IOException {
         String path = ex.getRequestURI().getPath();
         Long id = extractId(path);
         if (id == null) {
-            sendJson(ex, 400, gson.toJson(new ErrorResponse("Некорректный ID")));
+            sendJson(ex, HttpStatus.BAD_REQUEST, gson.toJson(new ErrorResponse("Некорректный ID")));
             return;
         }
 
@@ -125,7 +125,7 @@ public class MoviesHandler extends BaseHttpHandler {
         if (deleted) {
             sendNoContent(ex);
         } else {
-            sendJson(ex, 404, gson.toJson(new ErrorResponse("Фильм не найден")));
+            sendJson(ex, HttpStatus.NOT_FOUND, gson.toJson(new ErrorResponse("Фильм не найден")));
         }
     }
 
